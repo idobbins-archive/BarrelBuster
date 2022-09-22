@@ -104,7 +104,7 @@ float euclid_norm(std::tuple<float, float> x, std::tuple<float, float> y) {
   auto [x1, x2] = x;
   auto [y1, y2] = y;
 
-  auto r = diff_pow2(x1, x2) + diff_pow2(y1, y2);
+  auto r = diff_pow2(y1, x1) + diff_pow2(y2, x2);
 
   return std::sqrtf(r);
 }
@@ -121,37 +121,53 @@ float rdist_div_model(float d, float c, float r, std::vector<float> kterms) {
   return (d - c) / result;
 }
 
+
+
 int main(int argc, char **argv) {
 
   if (argc != 2) {
 	return 1;
   }
 
-  png_t png = {};
-  load_png(argv[1], &png);
+  png_t original = {};
+  load_png(argv[1], &original);
 
-  std::vector<float> kterms{-1, 2, 3, 4, 5};
+  png_t modified = original;
+  modified.row_pointers = std::vector<void *>();
 
-  for (size_t y = 0; y < png.height; y++) {
-	auto row = static_cast<png_bytep>(png.row_pointers[y]);
-	for (size_t x = 0; x < png.width; x++) {
-	  png_bytep rgba = &(row[x * 4]);
-	  uint8_t r = rgba[0];
-	  uint8_t g = rgba[1];
-	  uint8_t b = rgba[2];
-	  uint8_t a = rgba[3];
+  modified.row_pointers.reserve(modified.height);
+  for (size_t i = 0; i < modified.height; ++i) {
+	modified.row_pointers.push_back(malloc(modified.width * 4 * sizeof(png_byte)));
+  }
 
-	  std::cout <<
-		  std::to_string(r) << " " <<
-		  std::to_string(g) << " " <<
-		  std::to_string(b) << " " <<
-		  std::to_string(a) << std::endl;
+  std::vector<float> kterms{-1, .01, .04, .002, .3};
+
+  size_t cx = original.width / 2;
+  size_t cy = original.height / 2;
+
+  for (size_t oy = 0; oy < original.height; oy++) {
+
+	auto o_row = static_cast<png_bytep>(original.row_pointers[oy]);
+	auto m_row = static_cast<png_bytep>(modified.row_pointers[oy]);
+
+	for (size_t ox = 0; ox < original.width; ox++) {
+	  png_bytep o_px = &(o_row[ox * 4]);
+	  png_bytep m_px = &(m_row[ox * 4]);
+
+	  float e_norm = euclid_norm({ox, oy}, {cx, cy});
+
+	  size_t mx = (size_t)rdist_div_model(ox, cx, e_norm, kterms);
+	  size_t my = (size_t)rdist_div_model(oy, cy, e_norm, kterms);
+
+	  std::cout << std::to_string(ox) << " : " << std::to_string(mx) << std::endl;
+	  std::cout << std::to_string(oy) << " : " << std::to_string(my) << std::endl << std::endl;
 	}
   }
 
-  write_png("out.png", &png);
+  write_png("out.png", &modified);
 
-  free_png(png);
+  free_png(original);
+  free_png(modified);
 
   return 0;
 }
